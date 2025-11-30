@@ -6,8 +6,8 @@ const cloudinary = require('cloudinary').v2;
 const mongoose = require('mongoose');
 const User = require('../model/User');
 require('dotenv').config();
-const bcryptjs=require('bcryptjs');
-const jwt=require('jsonwebtoken'); 
+const bcryptjs = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 // Cloudinary config
 cloudinary.config({
@@ -18,15 +18,14 @@ cloudinary.config({
 
 // Signup route
 router.post('/signup', async (req, res) => {
-    User.find({email:req.body.email})
-    .then(User=>{
-        if(User.length>0)
-        {
-            return res.status(500).json({
-                error:"email already registration"
-            })
-        }
-    })
+    User.find({ email: req.body.email })
+        .then(User => {
+            if (User.length > 0) {
+                return res.status(500).json({
+                    error: "email already registration"
+                })
+            }
+        })
     try {
 
         if (!req.files || !req.files.image) {
@@ -47,9 +46,9 @@ router.post('/signup', async (req, res) => {
             } else {
                 const user = new User({
                     _id: new mongoose.Types.ObjectId,
-                    firstName: req.body.firstName,
-                    lastName: req.body.lastName,
+                    fullName: req.body.fullName,
                     email: req.body.email,
+                    phone: req.body.phone,
                     password: hash,
                     imageUrl: result.secure_url,
                     imageId: result.public_id
@@ -70,52 +69,50 @@ router.post('/signup', async (req, res) => {
             }
         });
 
-    } catch (err) {          
+    } catch (err) {
         res.status(500).json({ error: err });
     }
-}); 
+});
 //login
-router.post('/login',(req,res)=>{
-User.find({email:req.body.email})
-.then(User=>{
-    
-    if(User.length == 0)
-    {
-        return res.status(500).json({
-            msg:"email not registered"
-        })
-    }
-    bcryptjs.compare(req.body.password,User[0].password,(err,result)=>{
-        
-        if(!result)
-        {
-            return res.status(500).json({
-                error:"password matching failled"
+router.post('/login', (req, res) => {
+    User.find({ email: req.body.email })
+        .then(User => {
+
+            if (User.length == 0) {
+                return res.status(500).json({
+                    msg: "email not registered"
+                })
+            }
+            bcryptjs.compare(req.body.password, User[0].password, (err, result) => {
+
+                if (!result) {
+                    return res.status(500).json({
+                        error: "password matching failled"
+                    })
+                }
+                const token = jwt.sign({
+                    fullName: User[0].fullName,
+                    email: User[0].email,
+                    phone: [0].phone,
+                    uId: User[0]._id
+
+                },
+                    process.env.JWT_SECRET,
+                    {
+                        expiresIn: '565d'
+                    }
+                );
+                res.status(200).json({
+                    _id: User[0]._id,
+                    fullName: User[0].fullName,
+                    email: User[0].email,
+                    phone: req.body.phone,
+                    imageUrl: User[0].imageUrl,
+                    imageId: User[0].imageId,
+                    token: token
+                })
             })
-        }
-        const token=jwt.sign({
-            email:User[0].email,
-            firstName:User[0].firstName,
-            lastName:User[0].lastName,
-            uId:User[0]._id
-            
-        },
-       process.env.JWT_SECRET, 
-        {
-            expiresIn:'565d'
-        }
-     );
-     res.status(200).json({
-        _id:User[0]._id,
-        firstName:User[0].firstName,
-        lastName:User[0].lastName,
-        email:User[0].email,
-        imageUrl:User[0].imageUrl,
-        imageId:User[0].imageId,
-        token:token
-     })
-    })
+        })
 })
-})          
 
 module.exports = router;
