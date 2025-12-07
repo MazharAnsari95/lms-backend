@@ -52,7 +52,9 @@ router.get('/all-courses/', checkAuth, (req, res) => {
     const verify = jwt.verify(token, process.env.JWT_SECRET);
 
     Course.find({ uId: verify.uId })
-        .select('_id uId courseName  description price startingDate endDate imageUrl imageId')
+        // .select('_id uId courseName  description price startingDate endDate imageUrl imageId')
+        .select('_id uId courseName description price startingDate endDate imageUrl imageId')
+
         .then(result => {
             res.status(200).json({
                 courses: result
@@ -75,9 +77,11 @@ router.get('/course-detail/:id', checkAuth, (req, res) => {
         .then(result => {
             Student.find({ courseId: req.params.id })
                 .then(student => {
+                  
                     res.status(200).json({
+                        
                         course: result,
-                        studentList: student
+                        studentList: student,
                     })
 
                 })
@@ -100,11 +104,21 @@ router.delete('/:id', checkAuth, (req, res) => {
                 Course.findByIdAndDelete(req.params.id)
 
                     .then(result => {
+
                         cloudinary.uploader.destroy(course.imageId, (deletedImage) => {
-                            res.status(200).json({
-                                result: result
+                            Student.deleteMany({ courseId: req.params.id })
+                            .then(data=>{
+                               res.status(200).json({
+                                result:data
                             })
 
+                            })
+                            .catch(err=>{
+                                res.status(500).json({
+                                    msg: err
+                                })
+                            })
+                           
                         })
                     })
                     .catch(err => {

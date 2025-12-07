@@ -5,6 +5,8 @@ const Student = require('../model/Student')
 const mongoose = require('mongoose')
 const jwt = require('jsonwebtoken')
 const cloudinary = require('cloudinary').v2;
+const Fee = require('../model/Fee');
+const Course = require('../model/Course');
 
 cloudinary.config({
     cloud_name: process.env.CLOUD_NAME,
@@ -56,8 +58,45 @@ router.get('/all-student/', checkAuth, (req, res) => {
         .select('_id uId fullName phone email address courseId imageUrl imageId')
         .then(result => {
             res.status(200).json({
-                Student: result
+                // Student: result
+                studentList: result
             })
+        })
+        .catch(err => {
+            res.status(500).json({
+                error: err
+            })
+        })
+})
+
+// get student-detail by Id ------ new added variable
+router.get('/student-detail/:id', checkAuth, (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    console.log(verify, token)
+    Student.findById(req.params.id)
+
+        .select('_id uId fullName phone email address courseId imageUrl imageId')
+        .then(result => {
+            Fee.find({ uId: verify.uId, courseId: result.courseId, phone: result.phone })
+                .then(feedata => {
+                    Course.findById(result.courseId)
+                        .then(courseDetail => {
+                            res.status(200).json({
+                                studentDetail: result,
+                                feeDetail: feedata,
+                                courseDetail: courseDetail
+                            })
+                        })
+                        .catch(err => {
+                            console.log(err)
+                            res.status(500).json({
+                                error: err
+                            })
+                        })
+                })
+
+
         })
         .catch(err => {
             res.status(500).json({
@@ -75,7 +114,8 @@ router.get('/all-student/:courseId', checkAuth, (req, res) => {
         .select('_id uId fullName phone email address courseId imageUrl imageId')
         .then(result => {
             res.status(200).json({
-                Student: result
+                // Student: result
+                studentList: result
             })
         })
         .catch(err => {
@@ -123,7 +163,9 @@ router.delete('/:id', checkAuth, (req, res) => {
 router.put('/:id', checkAuth, (req, res) => {
     const token = req.headers.authorization.split(" ")[1];
     const verify = jwt.verify(token, process.env.JWT_SECRET);
-    console.log(verify.uId)
+    console.log("verify", verify.uId)
+    console.log("verify", verify.uId)
+
     Student.findById(req.params.id)
         .then(student => {
             if (verify.uId != student.uId) {
@@ -226,7 +268,7 @@ router.get('/latest-student', checkAuth, (req, res) => {
             })
         })
         .catch(err => {
-            res.status(500).json({ 
+            res.status(500).json({
                 error: err
             })
         })
