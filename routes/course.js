@@ -6,6 +6,7 @@ const mongoose = require('mongoose')
 const jwt = require('jsonwebtoken')
 const cloudinary = require('cloudinary').v2;
 const Student = require('../model/Student')
+const fee=require('../model/Fee')
 
 cloudinary.config({
     cloud_name: process.env.CLOUD_NAME,
@@ -77,9 +78,9 @@ router.get('/course-detail/:id', checkAuth, (req, res) => {
         .then(result => {
             Student.find({ courseId: req.params.id })
                 .then(student => {
-                  
+
                     res.status(200).json({
-                        
+
                         course: result,
                         studentList: student,
                     })
@@ -107,18 +108,18 @@ router.delete('/:id', checkAuth, (req, res) => {
 
                         cloudinary.uploader.destroy(course.imageId, (deletedImage) => {
                             Student.deleteMany({ courseId: req.params.id })
-                            .then(data=>{
-                               res.status(200).json({
-                                result:data
-                            })
+                                .then(data => {
+                                    res.status(200).json({
+                                        result: data
+                                    })
 
-                            })
-                            .catch(err=>{
-                                res.status(500).json({
-                                    msg: err
                                 })
-                            })
-                           
+                                .catch(err => {
+                                    res.status(500).json({
+                                        msg: err
+                                    })
+                                })
+
                         })
                     })
                     .catch(err => {
@@ -132,6 +133,12 @@ router.delete('/:id', checkAuth, (req, res) => {
                     msg: "bad request"
                 })
             }
+        })
+        .catch(err => {
+            console.log(err)
+            res.status(500).json({
+                error: err
+            })
         })
 })
 // update course
@@ -213,5 +220,52 @@ router.put('/:id', checkAuth, (req, res) => {
         })
 })
 
+// get latest 5 course data
+router.get('/latest-student', checkAuth, (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    Course.find({ uId: verify.uId })
+        .sort({ $natural: -1 }).limit(5)
+        .then(result => {
+            res.status(200).json({
+                courses: result
+            })
+        })
+        .catch(err => {
+            res.status(500).json({
+                error: err
+            })
+        })
+})
+
+// home api
+router.get('/home', checkAuth, async (req, res) => {
+     console.log("home API HIT");
+    try {
+        const token = req.headers.authorization.split(" ")[1];
+        const verify = jwt.verify(token, process.env.JWT_SECRET);
+        const newFees = await fee.find({ uId: verify.uId }).sort({ $natural: -1 }).limit(5)
+        const newStudents = await Student.find({ uId: verify.uId }).sort({ $natural: -1 }).limit(5)
+        const totalCourse = await Course.countDocuments({ uId: verify.uId })
+        const totalStudent = await Student.countDocuments({ uId: verify.uId })
+        const totalAmount= await fee.aggregate([
+            {$match :{uId:verify.uId}},
+            {$group:{_id:null,total:{$sum:"$amount"}}}
+        ])
+        res.status(200).json({
+            fees: newFees,
+            students: newStudents,
+            totalCourse: totalCourse,
+            totalStudent: totalStudent,
+            totalAmount:totalAmount.length>0?totalAmount[0].total:0
+        })
+
+    }
+    catch (err) {
+        res.status(500).json({
+            error: err
+        })
+    }
+})
 
 module.exports = router;
