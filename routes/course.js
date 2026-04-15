@@ -16,8 +16,7 @@ cloudinary.config({
 
 // add new course
 router.post('/add-course', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
     cloudinary.uploader.upload(req.files.image.tempFilePath, (err, result) => {
         const newCourse = new Course({
             _id: new mongoose.Types.ObjectId,
@@ -49,23 +48,50 @@ router.post('/add-course', checkAuth, (req, res) => {
 })
 // get all course 
 router.get('/all-courses/', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
+    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '10', 10), 1), 100);
+    const skip = (page - 1) * limit;
+    const q = (req.query.q || '').toString().trim();
+    const sortBy = (req.query.sortBy || 'createdAt').toString();
+    const order = (req.query.order || 'desc').toString().toLowerCase() === 'asc' ? 1 : -1;
 
-    Course.find({ uId: verify.uId })
-        // .select('_id uId courseName  description price startingDate endDate imageUrl imageId')
-        .select('_id uId courseName description price startingDate endDate imageUrl imageId')
+    const allowedSort = new Set(['createdAt', 'courseName', 'price', 'startingDate', 'endDate']);
+    const sortField = allowedSort.has(sortBy) ? sortBy : 'createdAt';
 
-        .then(result => {
+    const filter = { uId: verify.uId };
+    if (q) {
+        filter.$or = [
+            { courseName: { $regex: q, $options: 'i' } },
+            { description: { $regex: q, $options: 'i' } },
+        ];
+    }
+
+    Promise.all([
+        Course.find(filter)
+            .sort({ [sortField]: order })
+            .skip(skip)
+            .limit(limit)
+            .select('_id uId courseName description price startingDate endDate imageUrl imageId createdAt'),
+        Course.countDocuments(filter),
+    ])
+        .then(([result, total]) => {
             res.status(200).json({
-                courses: result
+                courses: result,
+                meta: {
+                    page,
+                    limit,
+                    total,
+                    totalPages: Math.ceil(total / limit),
+                    hasNext: page * limit < total,
+                    hasPrev: page > 1,
+                    q,
+                    sortBy: sortField,
+                    order: order === 1 ? 'asc' : 'desc',
+                }
             })
         })
-        .catch(err => {
-            res.status(500).json({
-                error: err
-            })
-        })
+        .catch(err => res.status(500).json({ error: err }))
 })
 
 // get one course for  any user
@@ -95,8 +121,7 @@ router.get('/course-detail/:id', checkAuth, (req, res) => {
 })
 // delete course
 router.delete('/:id', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
     Course.findById(req.params.id)
         .then(course => {
 
@@ -143,8 +168,7 @@ router.delete('/:id', checkAuth, (req, res) => {
 })
 // update course
 router.put('/:id', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
     console.log(verify.uId)
     Course.findById(req.params.id)
         .then(course => {
@@ -222,8 +246,7 @@ router.put('/:id', checkAuth, (req, res) => {
 
 // get latest 5 course data
 router.get('/latest-student', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
     Course.find({ uId: verify.uId })
         .sort({ $natural: -1 }).limit(5)
         .then(result => {
@@ -242,8 +265,7 @@ router.get('/latest-student', checkAuth, (req, res) => {
 router.get('/home', checkAuth, async (req, res) => {
      console.log("home API HIT");
     try {
-        const token = req.headers.authorization.split(" ")[1];
-        const verify = jwt.verify(token, process.env.JWT_SECRET);
+        const verify = req.user;
         const newFees = await fee.find({ uId: verify.uId }).sort({ $natural: -1 }).limit(5)
         const newStudents = await Student.find({ uId: verify.uId }).sort({ $natural: -1 }).limit(5)
         const totalCourse = await Course.countDocuments({ uId: verify.uId })

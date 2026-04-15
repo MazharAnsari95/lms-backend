@@ -18,8 +18,7 @@ cloudinary.config({
 
 // add new Student
 router.post('/add-student', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
     cloudinary.uploader.upload(req.files.image.tempFilePath, (err, result) => {
         const newStudent = new Student({
             _id: new mongoose.Types.ObjectId,
@@ -51,29 +50,58 @@ router.post('/add-student', checkAuth, (req, res) => {
 })
 // get all own  student
 router.get('/all-student/', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
+    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '10', 10), 1), 100);
+    const skip = (page - 1) * limit;
+    const q = (req.query.q || '').toString().trim();
+    const sortBy = (req.query.sortBy || 'createdAt').toString();
+    const order = (req.query.order || 'desc').toString().toLowerCase() === 'asc' ? 1 : -1;
 
-    Student.find({ uId: verify.uId })
-        .select('_id uId fullName phone email address courseId imageUrl imageId')
-        .then(result => {
+    const allowedSort = new Set(['createdAt', 'fullName', 'email', 'phone']);
+    const sortField = allowedSort.has(sortBy) ? sortBy : 'createdAt';
+
+    const filter = { uId: verify.uId };
+    if (q) {
+        filter.$or = [
+            { fullName: { $regex: q, $options: 'i' } },
+            { email: { $regex: q, $options: 'i' } },
+            { phone: { $regex: q, $options: 'i' } },
+        ];
+    }
+
+    Promise.all([
+        Student.find(filter)
+            .sort({ [sortField]: order })
+            .skip(skip)
+            .limit(limit)
+            .select('_id uId fullName phone email address courseId imageUrl imageId createdAt'),
+        Student.countDocuments(filter),
+    ])
+        .then(([result, total]) => {
             res.status(200).json({
-                // Student: result
-                studentList: result
+                studentList: result,
+                meta: {
+                    page,
+                    limit,
+                    total,
+                    totalPages: Math.ceil(total / limit),
+                    hasNext: page * limit < total,
+                    hasPrev: page > 1,
+                    q,
+                    sortBy: sortField,
+                    order: order === 1 ? 'asc' : 'desc',
+                }
             })
         })
         .catch(err => {
-            res.status(500).json({
-                error: err
-            })
+            res.status(500).json({ error: err })
         })
 })
 
 // get student-detail by Id ------ new added variable
 router.get('/student-detail/:id', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
-    console.log(verify, token)
+    const verify = req.user;
     Student.findById(req.params.id)
 
         .select('_id uId fullName phone email address courseId imageUrl imageId')
@@ -107,8 +135,7 @@ router.get('/student-detail/:id', checkAuth, (req, res) => {
 
 // get own all students gor  a course
 router.get('/all-student/:courseId', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
 
     Student.find({ uId: verify.uId, courseId: req.params.courseId })
         .select('_id uId fullName phone email address courseId imageUrl imageId')
@@ -127,8 +154,7 @@ router.get('/all-student/:courseId', checkAuth, (req, res) => {
 
 //delete student 
 router.delete('/:id', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
     Student.findById(req.params.id)
         .then(student => {
 
@@ -139,7 +165,7 @@ router.delete('/:id', checkAuth, (req, res) => {
 
 
                     .then(result => {
-                        cloudinary.uploader.destroy(Student.imageId, (deletedImage) => {
+                        cloudinary.uploader.destroy(student.imageId, () => {
                             res.status(200).json({
                                 result: result
                             })
@@ -161,8 +187,7 @@ router.delete('/:id', checkAuth, (req, res) => {
 })
 // update student
 router.put('/:id', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
     console.log("verify", verify.uId)
     console.log("verify", verify.uId)
 
@@ -240,31 +265,14 @@ router.put('/:id', checkAuth, (req, res) => {
         })
 })
 
-// get  latest 5 course data 
+// get latest 5 student data 
 router.get('/latest-student', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
+    const verify = req.user;
     Student.find({ uId: verify.uId })
         .sort({ $natural: -1 }).limit(5)
         .then(result => {
             res.status(200).json({
                 student: result
-            })
-        })
-        .catch(err => {
-            res.status(500).json({
-                error: err
-            })
-        })
-})
-router.get('/latest-student', checkAuth, (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
-    const verify = jwt.verify(token, process.env.JWT_SECRET);
-    Course.find({ uId: verify.uId })
-        .sort({ $natural: -1 }).limit(5)
-        .then(result => {
-            res.status(200).json({
-                course: result
             })
         })
         .catch(err => {
