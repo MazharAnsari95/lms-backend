@@ -5,6 +5,9 @@ const CourseRoute = require('./routes/course');
 const studentRoute = require('./routes/student');
 const feeRoute = require('./routes/fee');
 const assignmentRoute = require('./routes/assignment');
+const attendanceRoute = require('./routes/attendance');
+const marksheetRoute = require('./routes/marksheet');
+const receiptRoute = require('./routes/receipt');
 const mongoose = require('mongoose');
 const fileUpload = require('express-fileupload');
 const cors = require('cors')
@@ -30,6 +33,9 @@ app.use('/course', CourseRoute);
 app.use('/student', studentRoute);
 app.use('/fee', feeRoute);
 app.use('/assignment', assignmentRoute);
+app.use('/attendance', attendanceRoute);
+app.use('/marksheet', marksheetRoute);
+app.use('/receipt', receiptRoute);
 
 
 // 404 route
